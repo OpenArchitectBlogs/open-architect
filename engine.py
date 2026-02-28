@@ -54,7 +54,7 @@ def run_openclaw(prompt):
     result = subprocess.run(
         [
             "openclaw", "agent",
-            "--agent", "main",
+            "--agent", "open-architect",
             "--message", prompt,
             "--local",
             "--json"
@@ -62,6 +62,12 @@ def run_openclaw(prompt):
         capture_output=True,
         text=True
     )
+
+    print("RETURN CODE:", result.returncode)
+    print("STDOUT:", result.stdout[:500])
+    print("STDERR:", result.stderr[:500])
+
+    return result.stdout
 
     if result.returncode != 0:
         raise Exception(f"OpenClaw failed: {result.stderr}")
