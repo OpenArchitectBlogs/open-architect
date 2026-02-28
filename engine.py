@@ -54,7 +54,7 @@ def run_openclaw(prompt):
     result = subprocess.run(
         [
             "openclaw", "agent",
-            "--agent", "open-architect",
+            "--agent", "main",
             "--message", prompt,
             "--local",
             "--json"
