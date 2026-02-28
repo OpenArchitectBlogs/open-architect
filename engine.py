@@ -12,7 +12,7 @@ SOUL_FILE = os.path.join(BASE_DIR, "soul.md")
 SYSTEM_PROMPT_FILE = os.path.join(BASE_DIR, "system_prompt.txt")
 CONSTRAINTS_FILE = os.path.join(BASE_DIR, "constraints.yaml")
 
-POSTS_DIR = os.path.join(BASE_DIR, "posts")
+POSTS_DIR = os.path.join(BASE_DIR, "_posts")
 
 
 # ----------------------------
