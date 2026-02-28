@@ -1,8 +1,10 @@
 import os
 import json
 import yaml
+import logging
 from datetime import datetime
 import subprocess
+import traceback
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -13,21 +15,42 @@ SYSTEM_PROMPT_FILE = os.path.join(BASE_DIR, "system_prompt.txt")
 CONSTRAINTS_FILE = os.path.join(BASE_DIR, "constraints.yaml")
 
 POSTS_DIR = os.path.join(BASE_DIR, "_posts")
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+LOG_FILE = os.path.join(LOG_DIR, "engine.log")
+
+os.makedirs(LOG_DIR, exist_ok=True)
+
+logging.basicConfig(
+    filename=LOG_FILE,
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+)
+
+def log(msg):
+    print(msg)
+    logging.info(msg)
 
 
 def load_json(path):
+    log(f"Loading JSON: {path}")
     with open(path) as f:
         return json.load(f)
 
+
 def save_json(path, data):
+    log(f"Saving JSON: {path}")
     with open(path, "w") as f:
         json.dump(data, f, indent=2)
 
+
 def load_yaml(path):
+    log(f"Loading YAML: {path}")
     with open(path) as f:
         return yaml.safe_load(f)
 
+
 def load_text(path):
+    log(f"Loading text: {path}")
     with open(path) as f:
         return f.read()
 
@@ -35,10 +58,13 @@ def load_text(path):
 def get_next_topic(state, curriculum):
     phase = curriculum["phases"][state["current_phase"]]
     topic = phase["topics"][state["current_topic_index"]]
+    log(f"Selected Phase: {phase['name']}")
+    log(f"Selected Topic: {topic}")
     return phase["name"], topic
 
 
 def advance_state(state, curriculum):
+    log("Advancing state...")
     phase = curriculum["phases"][state["current_phase"]]
     state["current_topic_index"] += 1
 
@@ -51,6 +77,8 @@ def advance_state(state, curriculum):
 
 
 def run_openclaw(prompt):
+    log("Calling OpenClaw agent...")
+
     result = subprocess.run(
         [
             "openclaw", "agent",
@@ -63,26 +91,40 @@ def run_openclaw(prompt):
         text=True
     )
 
-    print("RETURN CODE:", result.returncode)
-    print("STDOUT:", result.stdout[:500])
-    print("STDERR:", result.stderr[:500])
-
-    return result.stdout
+    log(f"Return Code: {result.returncode}")
+    log(f"STDOUT (first 1500 chars):\n{result.stdout[:1500]}")
+    log(f"STDERR (first 1500 chars):\n{result.stderr[:1500]}")
 
     if result.returncode != 0:
-        raise Exception(f"OpenClaw failed: {result.stderr}")
+        log("OpenClaw returned non-zero exit code.")
+        raise Exception(result.stderr)
 
     try:
         data = json.loads(result.stdout)
-        # Adjust key depending on OpenClaw JSON format
-        return data.get("response") or data.get("output") or result.stdout
+        log("JSON parsed successfully.")
+
+        response = (
+            data.get("response")
+            or data.get("output")
+            or data.get("content")
+            or data.get("message")
+        )
+
+        if not response:
+            log("JSON parsed but no usable response field found.")
+            return result.stdout
+
+        log(f"Extracted response length: {len(response)} characters")
+        return response
+
     except json.JSONDecodeError:
-        # Fallback if CLI didn't return JSON properly
+        log("JSON parsing failed. Returning raw stdout.")
         return result.stdout
 
 
 def validate_article(article, constraints):
     words = len(article.split())
+    log(f"Article word count: {words}")
 
     if words < constraints["min_words"]:
         return False, "Too short"
@@ -99,25 +141,37 @@ def create_frontmatter(title, category):
 
     return f"""---
 layout: single
-title: {title}
+title: "{title}"
 date: {today}
-categories: {category}
+categories: [{category}]
 ---
 
 """
 
 
 def main():
-    state = load_json(STATE_FILE)
-    curriculum = load_yaml(CURRICULUM_FILE)
-    constraints = load_yaml(CONSTRAINTS_FILE)
+    try:
+        log("========== ENGINE START ==========")
 
-    soul = load_text(SOUL_FILE)
-    system_prompt = load_text(SYSTEM_PROMPT_FILE)
+        state = load_json(STATE_FILE)
+        curriculum = load_yaml(CURRICULUM_FILE)
+        constraints = load_yaml(CONSTRAINTS_FILE)
 
-    phase_name, topic = get_next_topic(state, curriculum)
+        if state["current_phase"] >= len(curriculum["phases"]):
+            log("Curriculum completed. Exiting.")
+            return
 
-    base_prompt = f"""
+        soul = load_text(SOUL_FILE)
+        system_prompt = load_text(SYSTEM_PROMPT_FILE)
+
+        phase_name, topic = get_next_topic(state, curriculum)
+
+        base_prompt = f"""
+You are operating in fully autonomous publishing mode.
+Do not ask questions.
+Do not request clarification.
+Produce final article only.
+
 {soul}
 
 {system_prompt}
@@ -125,55 +179,67 @@ def main():
 Phase: {phase_name}
 Topic: {topic}
 
-Write a complete article in Markdown.
+Write a complete long-form Markdown article.
 """
 
-    article = run_openclaw(base_prompt)
+        article = run_openclaw(base_prompt)
 
-    # Self critique pass
-    critique_prompt = f"""
-Review the following article.
-Strengthen technical rigor.
-Add missing tradeoffs.
-Deepen production insights.
-Fix logical inconsistencies.
+        log("Running critique pass...")
+
+        critique_prompt = f"""
+Improve the following article.
+Strengthen rigor.
+Add tradeoffs.
+Add failure modes.
+Output full revised article only.
 
 ARTICLE:
 {article}
 """
 
-    improved_article = run_openclaw(critique_prompt)
+        improved_article = run_openclaw(critique_prompt)
 
-    valid, reason = validate_article(improved_article, constraints)
+        valid, reason = validate_article(improved_article, constraints)
 
-    if not valid:
-        print(f"Validation failed: {reason}")
-        return
+        if not valid:
+            log(f"Validation failed: {reason}")
+            return
 
-    # Generate title & category
-    title = topic.title()
-    category = phase_name.lower().replace(" ", "-")
+        title = topic.title()
+        category = phase_name.lower().replace(" ", "-")
 
-    frontmatter = create_frontmatter(title, category)
+        frontmatter = create_frontmatter(title, category)
+        final_article = frontmatter + improved_article
 
-    final_article = frontmatter + improved_article
+        os.makedirs(POSTS_DIR, exist_ok=True)
 
-    os.makedirs(POSTS_DIR, exist_ok=True)
+        filename = f"{datetime.now().strftime('%Y-%m-%d')}-{topic.replace(' ', '-').lower()}.md"
+        filepath = os.path.join(POSTS_DIR, filename)
 
-    filename = f"{datetime.now().strftime('%Y-%m-%d')}-{topic.replace(' ', '-').lower()}.md"
-    filepath = os.path.join(POSTS_DIR, filename)
+        log(f"Writing file: {filepath}")
 
-    with open(filepath, "w") as f:
-        f.write(final_article)
+        with open(filepath, "w") as f:
+            f.write(final_article)
 
-    state = advance_state(state, curriculum)
-    save_json(STATE_FILE, state)
+        state = advance_state(state, curriculum)
+        save_json(STATE_FILE, state)
 
-    subprocess.run(["git", "add", "."])
-    subprocess.run(["git", "commit", "-m", f"Daily Post: {topic}"])
-    subprocess.run(["git", "push"])
+        log("Running git add...")
+        subprocess.run(["git", "add", "."], check=True)
 
-    print("Post published successfully.")
+        log("Running git commit...")
+        subprocess.run(["git", "commit", "-m", f"Daily Post: {topic}"], check=True)
+
+        log("Running git push...")
+        subprocess.run(["git", "push"], check=True)
+
+        log("Post published successfully.")
+        log("========== ENGINE END ==========")
+
+    except Exception as e:
+        log("ENGINE CRASHED.")
+        log(str(e))
+        log(traceback.format_exc())
 
 
 if __name__ == "__main__":
