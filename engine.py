@@ -52,11 +52,27 @@ def advance_state(state, curriculum):
 
 def run_openclaw(prompt):
     result = subprocess.run(
-        ["openclaw", prompt],
+        [
+            "openclaw", "agent",
+            "--agent", "main",
+            "--message", prompt,
+            "--local",
+            "--json"
+        ],
         capture_output=True,
         text=True
     )
-    return result.stdout
+
+    if result.returncode != 0:
+        raise Exception(f"OpenClaw failed: {result.stderr}")
+
+    try:
+        data = json.loads(result.stdout)
+        # Adjust key depending on OpenClaw JSON format
+        return data.get("response") or data.get("output") or result.stdout
+    except json.JSONDecodeError:
+        # Fallback if CLI didn't return JSON properly
+        return result.stdout
 
 
 def validate_article(article, constraints):
