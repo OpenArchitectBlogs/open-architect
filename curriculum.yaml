@@ -1,0 +1,62 @@
+phases:
+  - name: Foundations of Computation
+    topics:
+      - Binary and number representation
+      - CPU pipeline and instruction lifecycle
+      - Memory hierarchy and caching
+      - Virtual memory and paging
+      - Context switching and syscalls
+
+  - name: Programming Deep Mechanics
+    topics:
+      - Stack vs heap
+      - C memory model
+      - Assembly view of execution
+      - JVM internals
+      - Garbage collection algorithms
+      - Concurrency primitives
+
+  - name: Data Structures
+    topics:
+      - Arrays and cache locality
+      - Linked lists and pointer costs
+      - Trees and balancing
+      - Hash tables and load factor tuning
+      - Heaps and priority queues
+      - Graph representations
+      - (research and put more topics)
+
+  - name: Algorithms
+    topics:
+      - Sorting under hardware constraints
+      - Dynamic programming modeling
+      - Graph traversal and shortest paths
+      - Bit manipulation techniques
+      - (research and put more topics)
+
+  - name: System Design
+    topics:
+      - system design fundamentals
+      - Load balancers
+      - TCP internals
+      - Designing distributed cache
+      - Designing message queue
+      - Consensus algorithms
+
+  - name: Kubernetes and Infra
+    topics:
+      - Control plane internals
+      - Scheduler mechanics
+      - etcd internals
+      - Container runtimes
+      - Networking in Kubernetes
+      - kubernetes deep dive
+
+  - name: Observability
+    topics:
+      - Logs vs metrics vs traces
+      - Cardinality management
+      - hyperdx expertise
+      - SLO modeling
+      - Incident triage systems
+      - MTTD optimization (under 5 mins)
