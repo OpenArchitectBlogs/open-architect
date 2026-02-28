@@ -15,10 +15,6 @@ CONSTRAINTS_FILE = os.path.join(BASE_DIR, "constraints.yaml")
 POSTS_DIR = os.path.join(BASE_DIR, "_posts")
 
 
-# ----------------------------
-# Utility Loaders
-# ----------------------------
-
 def load_json(path):
     with open(path) as f:
         return json.load(f)
@@ -35,10 +31,6 @@ def load_text(path):
     with open(path) as f:
         return f.read()
 
-
-# ----------------------------
-# Curriculum Logic
-# ----------------------------
 
 def get_next_topic(state, curriculum):
     phase = curriculum["phases"][state["current_phase"]]
@@ -58,12 +50,7 @@ def advance_state(state, curriculum):
     return state
 
 
-# ----------------------------
-# OpenClaw Invocation
-# ----------------------------
-
 def run_openclaw(prompt):
-    # Replace with actual OpenClaw CLI command
     result = subprocess.run(
         ["openclaw", prompt],
         capture_output=True,
@@ -71,10 +58,6 @@ def run_openclaw(prompt):
     )
     return result.stdout
 
-
-# ----------------------------
-# Quality Checks
-# ----------------------------
 
 def validate_article(article, constraints):
     words = len(article.split())
@@ -89,9 +72,18 @@ def validate_article(article, constraints):
     return True, "OK"
 
 
-# ----------------------------
-# Main Engine
-# ----------------------------
+def create_frontmatter(title, category):
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    return f"""---
+layout: single
+title: {title}
+date: {today}
+categories: {category}
+---
+
+"""
+
 
 def main():
     state = load_json(STATE_FILE)
@@ -116,7 +108,7 @@ Write a complete article in Markdown.
 
     article = run_openclaw(base_prompt)
 
-    # Self-Critique Pass
+    # Self critique pass
     critique_prompt = f"""
 Review the following article.
 Strengthen technical rigor.
@@ -136,17 +128,25 @@ ARTICLE:
         print(f"Validation failed: {reason}")
         return
 
-    date_str = datetime.now().strftime("%Y-%m-%d")
-    filename = f"{date_str}-{topic.replace(' ', '-').lower()}.md"
+    # Generate title & category
+    title = topic.title()
+    category = phase_name.lower().replace(" ", "-")
+
+    frontmatter = create_frontmatter(title, category)
+
+    final_article = frontmatter + improved_article
+
+    os.makedirs(POSTS_DIR, exist_ok=True)
+
+    filename = f"{datetime.now().strftime('%Y-%m-%d')}-{topic.replace(' ', '-').lower()}.md"
     filepath = os.path.join(POSTS_DIR, filename)
 
     with open(filepath, "w") as f:
-        f.write(improved_article)
+        f.write(final_article)
 
     state = advance_state(state, curriculum)
     save_json(STATE_FILE, state)
 
-    # Git push
     subprocess.run(["git", "add", "."])
     subprocess.run(["git", "commit", "-m", f"Daily Post: {topic}"])
     subprocess.run(["git", "push"])
