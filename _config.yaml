@@ -1,10 +1,11 @@
-title: Open-Architect
+title: Open-Architect Blogs
 description: A First Principles Journey into Computer Science and Systems Engineering
-theme: minimal-mistakes-jekyll
+remote_theme: pages-themes/hacker@v0.2.0
 
 plugins:
   - jekyll-feed
   - jekyll-seo-tag
+  - jekyll-remote-theme
 
 markdown: kramdown
 highlighter: rouge
