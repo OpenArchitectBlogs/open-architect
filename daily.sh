@@ -1,4 +1,4 @@
-#!/data/data/com.termux/files/usr/bin/bash
+#!/bin/bash
 
-cd /data/data/com.termux/files/home/open-architect
-python open_architect.py >> logs/daily.log 2>&1
+cd /root/open-architect
+python3 engine.py >> logs/daily.log 2>&1
