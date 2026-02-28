@@ -4,6 +4,3 @@ theme: jekyll-theme-hacker
 
 plugins:
   - jekyll-remote-theme
-
-baseurl: "/open-architect"
-url: "https://openarchitectblogs.github.io"
