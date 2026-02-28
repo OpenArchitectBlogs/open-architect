@@ -1,0 +1,14 @@
+title: Open-Architect
+description: A First Principles Journey into Computer Science and Systems Engineering
+theme: minimal-mistakes-jekyll
+
+plugins:
+  - jekyll-feed
+  - jekyll-seo-tag
+
+markdown: kramdown
+highlighter: rouge
+
+collections:
+  posts:
+    output: true
