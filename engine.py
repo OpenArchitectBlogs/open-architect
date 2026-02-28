@@ -172,10 +172,6 @@ Do not ask questions.
 Do not request clarification.
 Produce final article only.
 
-{soul}
-
-{system_prompt}
-
 Phase: {phase_name}
 Topic: {topic}
 
