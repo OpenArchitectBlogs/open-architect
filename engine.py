@@ -108,6 +108,7 @@ def run_openclaw(prompt):
             or data.get("output")
             or data.get("content")
             or data.get("message")
+            or (data.get("payloads", [{}])[0].get("text") if data.get("payloads") else None)
         )
 
         if not response:
