@@ -1,5 +1,5 @@
 ---
-layout: single
+layout: default
 title: "Binary And Number Representation"
 date: 2026-03-08
 categories: [foundations-of-computation]
