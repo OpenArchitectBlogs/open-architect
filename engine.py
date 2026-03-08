@@ -47,8 +47,7 @@ def run_openclaw(prompt):
             "--message",
             prompt,
             "--local",
-            "--json",
-            "--no-workspace",
+            "--json"
         ],
         capture_output=True,
         text=True,
