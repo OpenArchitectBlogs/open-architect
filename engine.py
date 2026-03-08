@@ -9,6 +9,7 @@ from datetime import datetime
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 SOUL_FILE = os.path.join(BASE_DIR, "soul.md")
+STATE_FILE = os.path.join(BASE_DIR, "state.json")
 
 POSTS_DIR = os.path.join(BASE_DIR, "_posts")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
@@ -30,10 +31,30 @@ def log(msg):
 
 
 def load_text(path):
-    log(f"Loading: {path}")
     with open(path) as f:
         return f.read()
 
+
+# -------------------------
+# STATE MANAGEMENT
+# -------------------------
+
+def load_state():
+    if not os.path.exists(STATE_FILE):
+        return {"thought_number": 1}
+
+    with open(STATE_FILE) as f:
+        return json.load(f)
+
+
+def save_state(state):
+    with open(STATE_FILE, "w") as f:
+        json.dump(state, f, indent=2)
+
+
+# -------------------------
+# OPENCLAW CALL
+# -------------------------
 
 def run_openclaw(prompt):
     log("Calling OpenClaw...")
@@ -53,15 +74,12 @@ def run_openclaw(prompt):
         text=True,
     )
 
-    log(f"Return code: {result.returncode}")
-
     if result.returncode != 0:
         raise Exception(result.stderr)
 
     try:
         data = json.loads(result.stdout)
 
-        # Extract response from OpenClaw format
         if "payloads" in data and len(data["payloads"]) > 0:
             text = data["payloads"][0].get("text")
 
@@ -74,17 +92,19 @@ def run_openclaw(prompt):
             )
 
         if not text:
-            raise Exception("No usable text in response")
+            raise Exception("Empty response")
 
-        log(f"Generated text length: {len(text)}")
         return text.strip()
 
     except Exception:
-        log("JSON parse failed, returning raw output")
+        log("JSON parse failed. Returning raw output.")
         return result.stdout.strip()
 
 
-# Engineering topic pool
+# -------------------------
+# TOPIC GENERATION
+# -------------------------
+
 TOPICS = [
     "binary numbers",
     "timeouts in distributed systems",
@@ -94,18 +114,20 @@ TOPICS = [
     "cache invalidation",
     "memory fragmentation",
     "latency vs throughput",
-    "why distributed systems fail",
+    "distributed system failures",
     "garbage collection pauses",
-    "database indexes",
+    "database indexing",
     "the cost of abstraction",
     "observability vs monitoring",
     "eventual consistency",
     "message queues",
     "system complexity",
-    "any other interesting topics with respect to system design, java etc"
+    "java garbage collectors",
+    "jvm performance",
+    "cpu cache behavior",
+    "an interesting rare tip about system design, data structure, algorithm, observability or exciting"
 ]
 
-# Topic angles (makes posts interesting)
 ANGLES = [
     "Something engineers misunderstand about",
     "A strange property of",
@@ -122,38 +144,9 @@ def generate_topic():
     return f"{angle} {topic}"
 
 
-def create_frontmatter(title):
-    today = datetime.now().strftime("%Y-%m-%d")
-
-    return f"""---
-layout: default
-title: "{title}"
-date: {today}
-categories: [engineering]
----
-
-# {title}
-
-"""
-
-
-def generate_title(article):
-    prompt = f"""
-Generate a short title for this engineering reflection.
-
-Rules:
-Max 8 words.
-No clickbait.
-
-TEXT:
-{article}
-
-Return only the title.
-"""
-
-    title = run_openclaw(prompt)
-    return title.replace('"', "").strip()
-
+# -------------------------
+# POST GENERATION
+# -------------------------
 
 def generate_post(soul, topic):
 
@@ -169,9 +162,9 @@ Observation → Reframe → Insight
 
 Rules:
 120-200 words
+Short paragraphs
 One core idea
-No lists
-Natural prose
+No bullet points
 Calm tone
 
 Return markdown only.
@@ -180,12 +173,37 @@ Return markdown only.
     return run_openclaw(prompt)
 
 
-def save_post(title, article):
+# -------------------------
+# FRONTMATTER
+# -------------------------
+
+def create_frontmatter(title):
 
     today = datetime.now().strftime("%Y-%m-%d")
-    slug = title.lower().replace(" ", "-")
 
+    return f"""---
+layout: default
+title: "{title}"
+date: {today}
+categories: [engineering]
+---
+
+# {title}
+
+"""
+
+
+# -------------------------
+# SAVE POST
+# -------------------------
+
+def save_post(title, thought_number, article):
+
+    today = datetime.now().strftime("%Y-%m-%d")
+
+    slug = f"engineering-thought-{thought_number}"
     filename = f"{today}-{slug}.md"
+
     path = os.path.join(POSTS_DIR, filename)
 
     frontmatter = create_frontmatter(title)
@@ -196,12 +214,20 @@ def save_post(title, article):
     log(f"Post written: {path}")
 
 
+# -------------------------
+# GIT PUBLISH
+# -------------------------
+
 def git_publish(title):
 
     subprocess.run(["git", "add", "."], check=True)
-    subprocess.run(["git", "commit", "-m", f"Post: {title}"], check=True)
+    subprocess.run(["git", "commit", "-m", f"{title}"], check=True)
     subprocess.run(["git", "push"], check=True)
 
+
+# -------------------------
+# MAIN ENGINE
+# -------------------------
 
 def main():
 
@@ -211,7 +237,14 @@ def main():
 
         soul = load_text(SOUL_FILE)
 
+        state = load_state()
+        thought_number = state["thought_number"]
+
+        title = f"Engineering Thought #{thought_number}"
+
         topic = generate_topic()
+
+        log(f"Thought: {thought_number}")
         log(f"Topic: {topic}")
 
         article = generate_post(soul, topic)
@@ -220,15 +253,15 @@ def main():
         log(f"Word count: {words}")
 
         if words < 80:
-            log("Article too short, skipping.")
+            log("Article too short. Skipping.")
             return
 
-        title = generate_title(article)
-        log(f"Title: {title}")
-
-        save_post(title, article)
+        save_post(title, thought_number, article)
 
         git_publish(title)
+
+        state["thought_number"] += 1
+        save_state(state)
 
         log("Post published successfully.")
         log("===== ENGINE END =====")
