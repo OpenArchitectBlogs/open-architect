@@ -1,24 +1,21 @@
 import os
 import json
-import yaml
 import logging
-from datetime import datetime
 import subprocess
 import traceback
+import random
+from datetime import datetime
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-STATE_FILE = os.path.join(BASE_DIR, "state.json")
-CURRICULUM_FILE = os.path.join(BASE_DIR, "curriculum.yaml")
 SOUL_FILE = os.path.join(BASE_DIR, "soul.md")
-SYSTEM_PROMPT_FILE = os.path.join(BASE_DIR, "system_prompt.txt")
-CONSTRAINTS_FILE = os.path.join(BASE_DIR, "constraints.yaml")
 
 POSTS_DIR = os.path.join(BASE_DIR, "_posts")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
 LOG_FILE = os.path.join(LOG_DIR, "engine.log")
 
 os.makedirs(LOG_DIR, exist_ok=True)
+os.makedirs(POSTS_DIR, exist_ok=True)
 
 logging.basicConfig(
     filename=LOG_FILE,
@@ -26,206 +23,218 @@ logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
 )
 
+
 def log(msg):
     print(msg)
     logging.info(msg)
 
 
-def load_json(path):
-    log(f"Loading JSON: {path}")
-    with open(path) as f:
-        return json.load(f)
-
-
-def save_json(path, data):
-    log(f"Saving JSON: {path}")
-    with open(path, "w") as f:
-        json.dump(data, f, indent=2)
-
-
-def load_yaml(path):
-    log(f"Loading YAML: {path}")
-    with open(path) as f:
-        return yaml.safe_load(f)
-
-
 def load_text(path):
-    log(f"Loading text: {path}")
+    log(f"Loading: {path}")
     with open(path) as f:
         return f.read()
 
 
-def get_next_topic(state, curriculum):
-    phase = curriculum["phases"][state["current_phase"]]
-    topic = phase["topics"][state["current_topic_index"]]
-    log(f"Selected Phase: {phase['name']}")
-    log(f"Selected Topic: {topic}")
-    return phase["name"], topic
-
-
-def advance_state(state, curriculum):
-    log("Advancing state...")
-    phase = curriculum["phases"][state["current_phase"]]
-    state["current_topic_index"] += 1
-
-    if state["current_topic_index"] >= len(phase["topics"]):
-        state["current_phase"] += 1
-        state["current_topic_index"] = 0
-
-    state["total_posts"] += 1
-    return state
-
-
 def run_openclaw(prompt):
-    log("Calling OpenClaw agent...")
+    log("Calling OpenClaw...")
 
     result = subprocess.run(
         [
-            "openclaw", "agent",
-            "--agent", "main",
-            "--message", prompt,
+            "openclaw",
+            "agent",
+            "--agent",
+            "main",
+            "--message",
+            prompt,
             "--local",
-            "--json"
+            "--json",
+            "--no-workspace",
         ],
         capture_output=True,
-        text=True
+        text=True,
     )
 
-    log(f"Return Code: {result.returncode}")
-    log(f"STDOUT (first 1500 chars):\n{result.stdout[:1500]}")
-    log(f"STDERR (first 1500 chars):\n{result.stderr[:1500]}")
+    log(f"Return code: {result.returncode}")
 
     if result.returncode != 0:
-        log("OpenClaw returned non-zero exit code.")
         raise Exception(result.stderr)
 
     try:
         data = json.loads(result.stdout)
-        log("JSON parsed successfully.")
 
-        response = (
-            data.get("response")
-            or data.get("output")
-            or data.get("content")
-            or data.get("message")
-            or (data.get("payloads", [{}])[0].get("text") if data.get("payloads") else None)
-        )
+        # Extract response from OpenClaw format
+        if "payloads" in data and len(data["payloads"]) > 0:
+            text = data["payloads"][0].get("text")
 
-        if not response:
-            log("JSON parsed but no usable response field found.")
-            return result.stdout
+        else:
+            text = (
+                data.get("response")
+                or data.get("output")
+                or data.get("content")
+                or data.get("message")
+            )
 
-        log(f"Extracted response length: {len(response)} characters")
-        return response
+        if not text:
+            raise Exception("No usable text in response")
 
-    except json.JSONDecodeError:
-        log("JSON parsing failed. Returning raw stdout.")
-        return result.stdout
+        log(f"Generated text length: {len(text)}")
+        return text.strip()
 
-
-def validate_article(article, constraints):
-    words = len(article.split())
-    log(f"Article word count: {words}")
-
-    if words < constraints["min_words"]:
-        return False, "Too short"
-
-    return True, "OK"
+    except Exception:
+        log("JSON parse failed, returning raw output")
+        return result.stdout.strip()
 
 
-def create_frontmatter(title, category):
+# Engineering topic pool
+TOPICS = [
+    "binary numbers",
+    "timeouts in distributed systems",
+    "why abstractions leak",
+    "debugging production systems",
+    "thread scheduling",
+    "cache invalidation",
+    "memory fragmentation",
+    "latency vs throughput",
+    "why distributed systems fail",
+    "garbage collection pauses",
+    "database indexes",
+    "the cost of abstraction",
+    "observability vs monitoring",
+    "eventual consistency",
+    "message queues",
+    "system complexity",
+    "any other interesting topics with respect to system design, java etc"
+]
+
+# Topic angles (makes posts interesting)
+ANGLES = [
+    "Something engineers misunderstand about",
+    "A strange property of",
+    "A debugging lesson about",
+    "Why systems fail because of",
+    "The hidden cost of",
+    "What engineers forget about",
+]
+
+
+def generate_topic():
+    topic = random.choice(TOPICS)
+    angle = random.choice(ANGLES)
+    return f"{angle} {topic}"
+
+
+def create_frontmatter(title):
     today = datetime.now().strftime("%Y-%m-%d")
 
     return f"""---
-layout: single
+layout: default
 title: "{title}"
 date: {today}
-categories: [{category}]
+categories: [engineering]
 ---
 
 """
 
 
-def main():
-    try:
-        log("========== ENGINE START ==========")
+def generate_title(article):
+    prompt = f"""
+Generate a short title for this engineering reflection.
 
-        state = load_json(STATE_FILE)
-        curriculum = load_yaml(CURRICULUM_FILE)
-        constraints = load_yaml(CONSTRAINTS_FILE)
+Rules:
+Max 8 words.
+No clickbait.
 
-        if state["current_phase"] >= len(curriculum["phases"]):
-            log("Curriculum completed. Exiting.")
-            return
+TEXT:
+{article}
 
-        soul = load_text(SOUL_FILE)
-        system_prompt = load_text(SYSTEM_PROMPT_FILE)
-
-        phase_name, topic = get_next_topic(state, curriculum)
-
-        base_prompt = f"""
-You are operating in fully autonomous publishing mode.
-Do not ask questions.
-Do not request clarification.
-Produce final article only.
-
-Phase: {phase_name}
-Topic: {topic}
-
-Write a short engineering thought.
-
-Constraints:
-- 120–220 words
-- One idea
-- No lists
-- No sections
-- Natural prose
-- Slightly reflective tone
-
-Output Markdown only.
+Return only the title.
 """
 
-        article = run_openclaw(base_prompt)
-        improved_article = article
-        valid, reason = validate_article(improved_article, constraints)
+    title = run_openclaw(prompt)
+    return title.replace('"', "").strip()
 
-        if not valid:
-            log(f"Validation failed: {reason}")
+
+def generate_post(soul, topic):
+
+    prompt = f"""
+{soul}
+
+Topic: {topic}
+
+Write a short engineering reflection.
+
+Structure:
+Observation → Reframe → Insight
+
+Rules:
+120-200 words
+One core idea
+No lists
+Natural prose
+Calm tone
+
+Return markdown only.
+"""
+
+    return run_openclaw(prompt)
+
+
+def save_post(title, article):
+
+    today = datetime.now().strftime("%Y-%m-%d")
+    slug = title.lower().replace(" ", "-")
+
+    filename = f"{today}-{slug}.md"
+    path = os.path.join(POSTS_DIR, filename)
+
+    frontmatter = create_frontmatter(title)
+
+    with open(path, "w") as f:
+        f.write(frontmatter + article)
+
+    log(f"Post written: {path}")
+
+
+def git_publish(title):
+
+    subprocess.run(["git", "add", "."], check=True)
+    subprocess.run(["git", "commit", "-m", f"Post: {title}"], check=True)
+    subprocess.run(["git", "push"], check=True)
+
+
+def main():
+
+    try:
+
+        log("===== OPENCLAW BLOG ENGINE START =====")
+
+        soul = load_text(SOUL_FILE)
+
+        topic = generate_topic()
+        log(f"Topic: {topic}")
+
+        article = generate_post(soul, topic)
+
+        words = len(article.split())
+        log(f"Word count: {words}")
+
+        if words < 80:
+            log("Article too short, skipping.")
             return
 
-        title = topic.title()
-        category = phase_name.lower().replace(" ", "-")
+        title = generate_title(article)
+        log(f"Title: {title}")
 
-        frontmatter = create_frontmatter(title, category)
-        final_article = frontmatter + improved_article
+        save_post(title, article)
 
-        os.makedirs(POSTS_DIR, exist_ok=True)
-
-        filename = f"{datetime.now().strftime('%Y-%m-%d')}-{topic.replace(' ', '-').lower()}.md"
-        filepath = os.path.join(POSTS_DIR, filename)
-
-        log(f"Writing file: {filepath}")
-
-        with open(filepath, "w") as f:
-            f.write(final_article)
-
-        state = advance_state(state, curriculum)
-        save_json(STATE_FILE, state)
-
-        log("Running git add...")
-        subprocess.run(["git", "add", "."], check=True)
-
-        log("Running git commit...")
-        subprocess.run(["git", "commit", "-m", f"Daily Post: {topic}"], check=True)
-
-        log("Running git push...")
-        subprocess.run(["git", "push"], check=True)
+        git_publish(title)
 
         log("Post published successfully.")
-        log("========== ENGINE END ==========")
+        log("===== ENGINE END =====")
 
     except Exception as e:
-        log("ENGINE CRASHED.")
+
+        log("ENGINE CRASHED")
         log(str(e))
         log(traceback.format_exc())
 
