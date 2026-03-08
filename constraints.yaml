@@ -1,5 +1,5 @@
-min_words: 2000
-max_words: 4500
+min_words: 80
+max_words: 250
 required_sections:
   - Introduction
   - Intuition
