@@ -129,10 +129,6 @@ def validate_article(article, constraints):
     if words < constraints["min_words"]:
         return False, "Too short"
 
-    for section in constraints["required_sections"]:
-        if section not in article:
-            return False, f"Missing section: {section}"
-
     return True, "OK"
 
 
@@ -175,26 +171,21 @@ Produce final article only.
 Phase: {phase_name}
 Topic: {topic}
 
-Write a complete long-form Markdown article.
+Write a short engineering thought.
+
+Constraints:
+- 120–220 words
+- One idea
+- No lists
+- No sections
+- Natural prose
+- Slightly reflective tone
+
+Output Markdown only.
 """
 
         article = run_openclaw(base_prompt)
-
-        log("Running critique pass...")
-
-        critique_prompt = f"""
-Improve the following article.
-Strengthen rigor.
-Add tradeoffs.
-Add failure modes.
-Output full revised article only.
-
-ARTICLE:
-{article}
-"""
-
-        improved_article = run_openclaw(critique_prompt)
-
+        improved_article = article
         valid, reason = validate_article(improved_article, constraints)
 
         if not valid:
