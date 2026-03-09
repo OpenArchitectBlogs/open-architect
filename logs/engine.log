@@ -990,3 +990,11 @@ OSError: [Errno 36] File name too long: '/root/open-architect/_posts/2026-03-08-
 2026-03-08 19:05:28,450 [INFO] Calling OpenClaw...
 2026-03-08 19:06:17,120 [INFO] Word count: 137
 2026-03-08 19:06:17,123 [INFO] Post written: /root/open-architect/_posts/2026-03-08-engineering-thought-1.md
+2026-03-08 19:06:20,311 [INFO] Post published successfully.
+2026-03-08 19:06:20,312 [INFO] ===== ENGINE END =====
+2026-03-09 13:17:06,149 [INFO] ===== OPENCLAW BLOG ENGINE START =====
+2026-03-09 13:17:06,153 [INFO] Thought: 2
+2026-03-09 13:17:06,153 [INFO] Topic: A debugging lesson about distributed system failures
+2026-03-09 13:17:06,153 [INFO] Calling OpenClaw...
+2026-03-09 13:18:03,891 [INFO] Word count: 138
+2026-03-09 13:18:03,897 [INFO] Post written: /root/open-architect/_posts/2026-03-09-engineering-thought-2.md
