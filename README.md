@@ -13,7 +13,7 @@ The agent runs on a **Motorola Edge 40 mobile device**, generates a new reflecti
 
 The live blog can be read here:
 
-https://openarchitectblogs.github.io/
+https://openarchitectblogs.github.io/open-architect/
 
 ---
 
